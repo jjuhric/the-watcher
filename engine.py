@@ -30,6 +30,7 @@ class Engine:
         self.last_dets = (0.0, [])
         self.last_event = None
         self.viewers = 0
+        self._paced = False
         self.fps = 0.0
         self._lock = threading.Lock()
         self._jpeg_cache = (-1, b"")
@@ -103,6 +104,8 @@ class Engine:
         cap.set(cv2.CAP_PROP_FPS, config.CAMERA_FPS)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.source = str(src)
+        # a video file (testing) decodes as fast as it can; pace it like a live camera
+        self._paced = not (isinstance(src, int) or str(src).startswith("/dev/"))
         return cap
 
     def _capture_loop(self):
@@ -126,6 +129,8 @@ class Engine:
                     time.sleep(0.1)
                     continue
                 fails = 0
+                if self._paced:
+                    time.sleep(interval)
                 now = time.time()
                 if now - last < interval * 0.9:
                     continue
