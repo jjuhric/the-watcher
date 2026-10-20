@@ -1,0 +1,3 @@
+# Lets the "plugdev" group switch USB port power (uhubctl) without sudo, so The Watcher can power its camera's port off and on.
+# Install: sudo cp deploy/99-watcher-usb-power.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb
+SUBSYSTEM=="usb", ATTR{idVendor}=="1d6b", GROUP="plugdev", MODE="0660"

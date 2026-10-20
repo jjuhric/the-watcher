@@ -1,7 +1,10 @@
 """Camera capture + motion gate + detection + snapshot logging."""
 import json
 import logging
+import os
+import re
 import shutil
+import subprocess
 import threading
 import time
 from collections import Counter
@@ -36,6 +39,9 @@ class Engine:
         self._jpeg_cache = (-1, b"")
         self.zones = self._load_zones()
         self.enabled = self._load_enabled()
+        self.usb = self._state().get("usb")        # {"hub": "1", "port": "1"}, learned from the open camera
+        self._port_off = False
+        self._off_tried = False
         self._zone_mask = None
         self._stop = threading.Event()
         # scene state
@@ -59,11 +65,47 @@ class Engine:
         db.add_event("system", note="Service started" + ("" if self.detector else " (detector NOT loaded)"))
 
     # ---------- on / off switch ----------
-    def _load_enabled(self):
+    def _state(self):
         try:
-            return bool(json.loads(config.STATE_PATH.read_text()).get("enabled", True))
+            return json.loads(config.STATE_PATH.read_text())
         except Exception:
-            return True
+            return {}
+
+    def _save_state(self, **kw):
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        config.STATE_PATH.write_text(json.dumps({**self._state(), **kw}))
+
+    def _load_enabled(self):
+        return bool(self._state().get("enabled", True))
+
+    def _learn_usb_port(self, src):
+        """Works out which hub/port the camera is plugged into (from sysfs) so the port can be switched later."""
+        try:
+            node = os.path.realpath(src)                                   # /dev/video0
+            dev = os.path.realpath(f"/sys/class/video4linux/{os.path.basename(node)}/device")
+            m = re.fullmatch(r"(\d+)-([\d.]+):[\d.]+", os.path.basename(dev))     # e.g. 1-1:1.0
+            if not m:
+                return
+            ports = m.group(2).split(".")
+            loc = {"hub": m.group(1) if len(ports) == 1 else f"{m.group(1)}-{'.'.join(ports[:-1])}", "port": ports[-1]}
+            if loc != self.usb:
+                self.usb = loc
+                self._save_state(usb=loc)
+        except Exception:
+            log.exception("could not work out the camera's USB port")
+
+    def _usb_power(self, on):
+        """Returns "" on success, otherwise a short reason."""
+        if not config.USB_POWER:
+            return "USB power switching is disabled"
+        if not self.usb:
+            return "USB port not known yet"
+        try:
+            r = subprocess.run([config.UHUBCTL, "-l", self.usb["hub"], "-p", self.usb["port"], "-a", "on" if on else "off"],
+                               capture_output=True, text=True, timeout=20)
+            return "" if r.returncode == 0 else (r.stderr or r.stdout).strip()[-120:]
+        except Exception as e:
+            return f"{type(e).__name__}: {e}"[:120]
 
     def set_enabled(self, on, by="web page"):
         """Off releases the camera completely (its light goes out) and pauses detection. Survives restarts."""
@@ -71,8 +113,7 @@ class Engine:
         if on == self.enabled:
             return self.enabled
         self.enabled = on
-        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        config.STATE_PATH.write_text(json.dumps({"enabled": on}))
+        self._save_state(enabled=on)
         if not on:
             with self._lock:
                 self.frame = None
@@ -80,7 +121,7 @@ class Engine:
             self._cur_sig, self._pending_sig, self._pending_n, self._empty_since = (), (), 0, None
             self.motion = 0.0
         db.add_event("system", note=f"Camera turned {'on' if on else 'off'} ({by})")
-        return self.enabled
+        return self.enabled      # the capture thread releases the camera and switches the USB port
 
     # ---------- zones ----------
     def _load_zones(self):
@@ -129,6 +170,8 @@ class Engine:
         cap.set(cv2.CAP_PROP_FPS, config.CAMERA_FPS)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.source = str(src)
+        if str(src).startswith("/dev/"):
+            self._learn_usb_port(src)
         # a video file (testing) decodes as fast as it can; pace it like a live camera
         self._paced = not (isinstance(src, int) or str(src).startswith("/dev/"))
         return cap
@@ -138,8 +181,21 @@ class Engine:
         while not self._stop.is_set():
             if not self.enabled:
                 self.online = False
+                if not self._off_tried:
+                    self._off_tried = True
+                    why = self._usb_power(False)
+                    self._port_off = not why
+                    db.add_event("system", note="Camera USB port powered off" if not why else
+                                 f"Camera paused in software only (USB power not switched: {why})")
                 time.sleep(0.5)
                 continue
+            if self._off_tried:
+                self._off_tried = False
+                if self._port_off:
+                    why = self._usb_power(True)
+                    db.add_event("system", note="Camera USB port powered on" if not why else f"USB power on failed: {why}")
+                    self._port_off = False
+                    time.sleep(3)                     # let the camera enumerate
             cap = self._open()
             if cap is None:
                 if self.online:

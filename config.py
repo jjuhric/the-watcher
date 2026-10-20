@@ -30,6 +30,9 @@ IMG_DIR = DATA_DIR / "images"
 DB_PATH = DATA_DIR / "livingcam.db"
 ZONES_PATH = DATA_DIR / "zones.json"
 STATE_PATH = DATA_DIR / "state.json"
+# Switching the camera off also cuts power to its USB port with uhubctl (needs the udev rule in deploy/).
+UHUBCTL = os.environ.get("LC_UHUBCTL", "/usr/sbin/uhubctl")
+USB_POWER = os.environ.get("LC_USB_POWER", "1") == "1"
 MODEL_PATH = Path(os.environ.get("MODEL_PATH", BASE / "models" / "yolo11n.onnx"))
 
 TZ = "America/Chicago"
