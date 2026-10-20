@@ -25,3 +25,7 @@ if ((Get-Item $tmp).Length -gt 1024) { tar -xf $tmp -C $Dest }
 Remove-Item $tmp -Force
 Set-Content $stateFile $started
 "Synced to $Dest (since $since UTC)"
+
+# 3. refresh the local credentials file if the login was changed on the Pi (no-op otherwise)
+$pull = Join-Path $PSScriptRoot 'pull_creds.ps1'
+if (Test-Path $pull) { & $pull }
