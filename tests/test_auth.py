@@ -192,6 +192,7 @@ def test_changing_login_updates_assistant_copy_and_signs_everyone_out(client):
 
 
 def test_camera_switch_pauses_and_resumes(client):
+    auth._write("viewer", "first-password-123", True)       # earlier tests changed the login
     login(client)
     assert client.post("/api/camera", json={"on": "yes"}, headers=H).status_code == 400
     assert client.post("/api/camera", json={"on": False}, headers=H).get_json() == {"enabled": False}
