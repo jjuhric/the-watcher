@@ -1,3 +1,6 @@
 # Lets the "plugdev" group switch USB port power (uhubctl) without sudo, so The Watcher can power its camera's port off and on.
 # Install: sudo cp deploy/99-watcher-usb-power.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb
 SUBSYSTEM=="usb", ATTR{idVendor}=="1d6b", GROUP="plugdev", MODE="0660"
+
+# Keep the camera awake (no USB autosuspend). A suspended device whose port is powered off is not noticed as unplugged by the kernel.
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="046d", ATTR{idProduct}=="08e5", TEST=="power/control", ATTR{power/control}="on"
