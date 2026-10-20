@@ -40,3 +40,12 @@ input,select{background:var(--card);color:var(--fg);border:1px solid var(--line)
 .box.static span{background:#c8a03c}.box.sel span{background:var(--accent);color:#fff}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px}
 .brand{display:flex;align-items:center;gap:12px}
+.wrap{padding-top:60px}
+.menu{position:fixed;top:10px;right:12px;z-index:20}
+.menu-btn{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.menu-btn:hover{border-color:var(--accent)}
+.menu-list{position:absolute;right:0;top:48px;min-width:230px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.menu-list a{display:block;padding:10px 12px;border-radius:8px;color:var(--fg);text-decoration:none}
+.menu-list a:hover{background:var(--bg)}.menu-list a.on{color:var(--accent);font-weight:600}
+.form{max-width:420px;display:grid;gap:12px}.form label{display:grid;gap:4px;font-size:.9rem;color:var(--dim)}
+.form input{width:100%}.msg{padding:10px 12px;border-radius:8px;border:1px solid var(--line)}.msg.ok{border-color:var(--ok);color:var(--ok)}.msg.bad{border-color:var(--bad);color:var(--bad)}

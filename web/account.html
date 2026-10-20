@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Watcher · Account</title><link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="apple-touch-icon" href="/icon-192.png"><link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+<meta name="theme-color" content="#0f1722">
+</head><body><div class="wrap">
+<h1 class="brand"><img src="/logo.svg" alt="" width="44" height="44"> Change Username / Password</h1>
+<form class="form" id="f" autocomplete="off">
+  <label>Current password (required)<input type="password" id="cur" autocomplete="current-password" required></label>
+  <label>Username<input id="usr" autocomplete="off" maxlength="32"></label>
+  <label>New password (leave blank to keep the current one)<input type="password" id="np" autocomplete="new-password"></label>
+  <label>Confirm new password<input type="password" id="np2" autocomplete="new-password"></label>
+  <div><button class="btn primary" type="submit">Save changes</button></div>
+  <div id="msg" class="msg" hidden></div>
+  <div class="dim">Usernames: 3-32 letters, numbers, . _ - &nbsp;·&nbsp; Passwords: at least 10 characters. After saving, your browser asks you to sign in again.</div>
+</form>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let orig='';
+fetch('/api/account').then(r=>r.json()).then(j=>{orig=j.user;$('usr').value=j.user;});
+function show(ok,t){const m=$('msg');m.hidden=false;m.className='msg '+(ok?'ok':'bad');m.textContent=t;}
+$('f').onsubmit=async e=>{
+  e.preventDefault();
+  if($('np').value!==$('np2').value)return show(false,'The new passwords do not match.');
+  const body={current_password:$('cur').value};
+  if($('usr').value.trim()&&$('usr').value.trim()!==orig)body.new_username=$('usr').value.trim();
+  if($('np').value)body.new_password=$('np').value;
+  const r=await fetch('/api/account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json();show(j.ok,j.message);
+  if(j.ok){$('f').querySelectorAll('input').forEach(i=>i.disabled=true);setTimeout(()=>location.href='/',2500);}
+};
+</script><script src="/menu.js"></script></body></html>

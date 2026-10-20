@@ -1,4 +1,3 @@
-import hmac
 import logging
 import time
 from datetime import timedelta
@@ -6,6 +5,7 @@ from datetime import timedelta
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 from waitress import serve
 
+import auth
 import config
 import db
 from engine import Engine
@@ -19,9 +19,7 @@ WEB = config.BASE / "web"
 @app.before_request
 def require_auth():
     a = request.authorization
-    ok = (a and hmac.compare_digest(a.username or "", config.USER)
-          and hmac.compare_digest(a.password or "", config.PASSWORD))
-    if not ok:
+    if not (a and auth.verify(a.username, a.password)):
         return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="The Watcher"'})
 
 
@@ -47,7 +45,7 @@ def logs_page():
     return send_from_directory(WEB, "logs.html")
 
 
-ASSETS = {"style.css", "logo.svg", "favicon.ico", "icon-192.png", "icon-512.png", "manifest.webmanifest"}
+ASSETS = {"style.css", "menu.js", "logo.svg", "favicon.ico", "icon-192.png", "icon-512.png", "manifest.webmanifest"}
 
 
 @app.get("/<any_asset>")
@@ -55,6 +53,11 @@ def asset(any_asset):
     if any_asset not in ASSETS:
         abort(404)
     return send_from_directory(WEB, any_asset)
+
+
+@app.get("/account")
+def account_page():
+    return send_from_directory(WEB, "account.html")
 
 
 @app.get("/img/<path:rel>")
@@ -83,6 +86,20 @@ def stream():
 
 
 # ---------- API ----------
+@app.get("/api/account")
+def api_account_get():
+    return jsonify(user=auth.current_user())
+
+
+@app.post("/api/account")
+def api_account_post():
+    j = request.get_json(silent=True) or {}
+    ok, msg = auth.change(j.get("current_password"), j.get("new_username"), j.get("new_password"))
+    if not ok:
+        time.sleep(1)  # slow down password guessing
+    return jsonify(ok=ok, message=msg), (200 if ok else 400)
+
+
 @app.get("/api/status")
 def api_status():
     return jsonify(engine.status())
@@ -139,9 +156,9 @@ def api_summary():
 
 
 if __name__ == "__main__":
-    if not config.USER or not config.PASSWORD:
-        raise SystemExit("LC_USER and LC_PASS must be set (see .env.example)")
     db.init()
+    if not auth.AUTH_PATH.exists() and not (config.USER and config.PASSWORD):
+        raise SystemExit("First run needs LC_USER and LC_PASS (see .env.example)")
     engine.start()
     logging.info("serving on http://%s:%s", config.BIND, config.PORT)
     serve(app, host=config.BIND, port=config.PORT, threads=8)
