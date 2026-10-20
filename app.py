@@ -82,6 +82,14 @@ def stream():
 
 
 # ---------- API ----------
+@app.post("/api/camera")
+def api_camera():
+    on = (request.get_json(silent=True) or {}).get("on")
+    if not isinstance(on, bool):
+        abort(400)
+    return jsonify(enabled=engine.set_enabled(on))
+
+
 @app.get("/api/status")
 def api_status():
     return jsonify(engine.status())

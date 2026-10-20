@@ -189,3 +189,20 @@ def test_changing_login_updates_assistant_copy_and_signs_everyone_out(client):
     # opting out removes the plaintext copy
     ok, _ = auth.change("second-password-456", share=False)
     assert ok and not access.exists()
+
+
+def test_camera_switch_pauses_and_resumes(client):
+    login(client)
+    assert client.post("/api/camera", json={"on": "yes"}, headers=H).status_code == 400
+    assert client.post("/api/camera", json={"on": False}, headers=H).get_json() == {"enabled": False}
+    assert client.get("/api/status", headers=H).get_json()["enabled"] is False
+    jpg, seq = appmod.engine.live_jpeg()
+    assert seq == -2 and jpg[:2] == b"\xff\xd8"                      # the "turned off" picture
+    assert json.loads(config_state().read_text()) == {"enabled": False}
+    assert client.post("/api/camera", json={"on": True}, headers=H).get_json() == {"enabled": True}
+    assert client.post("/api/camera", json={"on": False}).status_code == 401    # needs sign-in
+
+
+def config_state():
+    import config
+    return config.STATE_PATH

@@ -6,7 +6,7 @@
 <link rel="apple-touch-icon" href="/icon-192.png"><link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
 <meta name="theme-color" content="#0f1722">
 </head><body><div class="wrap">
-<div class="nav"><a class="back" href="/"><img src="/logo.svg" alt="" width="22" height="22" style="vertical-align:-5px"> The Watcher</a><a href="/logs">Logs</a><span id="st" class="chip">…</span></div>
+<div class="nav"><a class="back" href="/"><img src="/logo.svg" alt="" width="22" height="22" style="vertical-align:-5px"> The Watcher</a><a href="/logs">Logs</a><span id="st" class="chip">…</span><label class="sw" title="Turns the camera and detection on or off"><input type="checkbox" id="camsw"><span class="trk"></span><span id="camsw-t">Camera</span></label></div>
 <div class="stage" id="stage">
   <img id="feed" src="/stream.mjpg" alt="live feed">
   <div class="overlay" id="ov"></div>
@@ -60,10 +60,18 @@ async function tick(){
   try{
     const s=await(await fetch('/api/status')).json();
     const c=document.getElementById('st');
-    c.textContent=s.camera_online?`online · ${s.fps} fps`:'camera OFFLINE';c.className='chip '+(s.camera_online?'ok':'bad');
+    c.textContent=!s.enabled?'turned off':s.camera_online?`online · ${s.fps} fps`:'camera OFFLINE';c.className='chip '+(!s.enabled?'':s.camera_online?'ok':'bad');setSw(s.enabled);
     document.getElementById('info').textContent=`${s.now_local} · motion ${s.motion_pct}% · in view: ${s.scene_now.join(', ')}`;
   }catch(e){}
 }
 (async()=>{zones=(await(await fetch('/api/zones')).json()).zones;draw();})();
+async function loadSw(){try{const s=await(await fetch('/api/status')).json();setSw(s.enabled);}catch(e){}}
+function setSw(on){const c=document.getElementById('camsw');if(!c)return;c.checked=on;document.getElementById('camsw-t').textContent='Camera '+(on?'on':'off');}
+document.getElementById('camsw').addEventListener('change',async e=>{
+  const on=e.target.checked;e.target.disabled=true;
+  try{const j=await(await fetch('/api/camera',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({on})})).json();setSw(j.enabled);}
+  catch(x){setSw(!on);} finally{e.target.disabled=false;}
+});
+loadSw();
 tick();setInterval(tick,3000);
 </script><script src="/menu.js"></script></body></html>

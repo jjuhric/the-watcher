@@ -35,6 +35,7 @@ class Engine:
         self._lock = threading.Lock()
         self._jpeg_cache = (-1, b"")
         self.zones = self._load_zones()
+        self.enabled = self._load_enabled()
         self._zone_mask = None
         self._stop = threading.Event()
         # scene state
@@ -56,6 +57,30 @@ class Engine:
         for fn in (self._capture_loop, self._analyze_loop, self._housekeeping_loop):
             threading.Thread(target=fn, daemon=True).start()
         db.add_event("system", note="Service started" + ("" if self.detector else " (detector NOT loaded)"))
+
+    # ---------- on / off switch ----------
+    def _load_enabled(self):
+        try:
+            return bool(json.loads(config.STATE_PATH.read_text()).get("enabled", True))
+        except Exception:
+            return True
+
+    def set_enabled(self, on, by="web page"):
+        """Off releases the camera completely (its light goes out) and pauses detection. Survives restarts."""
+        on = bool(on)
+        if on == self.enabled:
+            return self.enabled
+        self.enabled = on
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        config.STATE_PATH.write_text(json.dumps({"enabled": on}))
+        if not on:
+            with self._lock:
+                self.frame = None
+            self.last_dets = (0.0, [])
+            self._cur_sig, self._pending_sig, self._pending_n, self._empty_since = (), (), 0, None
+            self.motion = 0.0
+        db.add_event("system", note=f"Camera turned {'on' if on else 'off'} ({by})")
+        return self.enabled
 
     # ---------- zones ----------
     def _load_zones(self):
@@ -111,6 +136,10 @@ class Engine:
     def _capture_loop(self):
         interval = 1.0 / max(1, config.CAMERA_FPS)
         while not self._stop.is_set():
+            if not self.enabled:
+                self.online = False
+                time.sleep(0.5)
+                continue
             cap = self._open()
             if cap is None:
                 if self.online:
@@ -121,7 +150,7 @@ class Engine:
             log.info("camera open: %s", self.source)
             db.add_event("system", note=f"Camera online ({self.source})")
             fails, last, n, t0 = 0, 0.0, 0, time.time()
-            while not self._stop.is_set():
+            while not self._stop.is_set() and self.enabled:
                 if not cap.grab():
                     fails += 1
                     if fails > 30:
@@ -146,7 +175,7 @@ class Engine:
                 if now - t0 >= 5:
                     self.fps, n, t0 = n / (now - t0), 0, now
             cap.release()
-            if self.online:
+            if self.online and self.enabled:
                 db.add_event("system", note="Camera went offline")
             self.online = False
             time.sleep(2)
@@ -244,7 +273,17 @@ class Engine:
         log.info("snapshot #%s %s %s", self.last_event, kind, note)
 
     # ---------- live view ----------
+    def _placeholder(self, text):
+        img = np.full((540, 960, 3), (23, 18, 15), np.uint8)
+        (w, h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.1, 2)
+        cv2.putText(img, text, ((960 - w) // 2, 270 + h // 2), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (200, 190, 175), 2, cv2.LINE_AA)
+        return cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
+
     def live_jpeg(self):
+        if not self.enabled:
+            if self._jpeg_cache[0] != -2:
+                self._jpeg_cache = (-2, self._placeholder("Camera is turned off"))
+            return self._jpeg_cache[1], -2
         frame, seq = self.get_frame()
         if frame is None:
             return None, -1
@@ -307,7 +346,7 @@ class Engine:
         du = shutil.disk_usage(config.DATA_DIR)
         last = db.fetch_events(limit=1)
         return {
-            "camera_online": self.online, "source": self.source, "fps": round(self.fps, 1),
+            "enabled": self.enabled, "camera_online": self.online, "source": self.source, "fps": round(self.fps, 1),
             "motion_pct": round(self.motion * 100, 2), "detector_loaded": self.detector is not None,
             "scene_now": [f"{n} x {c}" for c, n in self._cur_sig] or ["empty"],
             "viewers": self.viewers, "disk_free_gb": round(du.free / 1e9, 1),

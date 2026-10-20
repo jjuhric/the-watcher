@@ -29,6 +29,7 @@ DATA_DIR = Path(os.environ.get("LC_DATA_DIR", BASE / "data")).resolve()
 IMG_DIR = DATA_DIR / "images"
 DB_PATH = DATA_DIR / "livingcam.db"
 ZONES_PATH = DATA_DIR / "zones.json"
+STATE_PATH = DATA_DIR / "state.json"
 MODEL_PATH = Path(os.environ.get("MODEL_PATH", BASE / "models" / "yolo11n.onnx"))
 
 TZ = "America/Chicago"
