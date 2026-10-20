@@ -41,10 +41,23 @@ journalctl --user -u livingcam -f
 
 Then open `http://<LC_BIND>:5070` (e.g. over Tailscale) and sign in.
 
+## Sign-in
+
+- Browser: `/login` page with username + password, or **fingerprint / face / Windows Hello** (WebAuthn passkeys).
+  Add a device from the menu -> *Change Username / Password* while on the https address. Needs `LC_RP_ID` and
+  `LC_ORIGINS` in `.env`. Passkey code: `webauthn_lite.py` (user presence + verification, challenge, origin, counter checks).
+- Scripts/curl: HTTP Basic still works (`curl -u user:pass .../api/summary`).
+- Sessions are random tokens in an HttpOnly, Secure, SameSite=Strict cookie (only a hash is stored). Failed sign-ins lock out.
+- The account page changes the username/password (stored as a salted PBKDF2 hash in `data/auth.json`) and signs everyone out.
+- Optional: "keep a copy for my assistant" writes `data/claude-access.json` (plaintext, mode 600) on every change;
+  `scripts/pull_creds.ps1` copies it to a local credentials file (run it on a schedule). Untick the box to delete the copy.
+- Tests: `.venv/bin/python -m pytest tests -q`.
+
 ## Secrets
 
-`.env` (credentials), `data/` (images + database) and `models/*.onnx` are git-ignored. Never commit them.
-The server refuses to start without `LC_USER` / `LC_PASS`, and every route requires HTTP Basic auth.
+`.env` (credentials), `data/` (images, database, logins, passkeys) and `models/*.onnx` are git-ignored. Never commit them.
+The server needs `LC_USER` / `LC_PASS` for the first run only, and every route except the sign-in page and static assets
+requires a session or HTTP Basic.
 Run it with `LC_BIND=127.0.0.1` and publish it privately with `tailscale serve --bg --https=5070 http://127.0.0.1:5070`,
 which gives a tailnet-only HTTPS address with a real certificate (nothing is exposed on the LAN or internet).
 
