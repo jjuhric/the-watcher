@@ -37,7 +37,11 @@ def client_ip():
 
 
 def is_https():
-    return request.headers.get("X-Forwarded-Proto", request.scheme) == "https"
+    """Behind `tailscale serve` the app itself sees plain http, so trust the proxy header or the configured origin."""
+    if request.headers.get("X-Forwarded-Proto", request.scheme) == "https":
+        return True
+    host = request.headers.get("X-Forwarded-Host") or request.host
+    return any(o.startswith("https://") and o[len("https://"):] == host for o in config.ORIGINS)
 
 
 def same_origin():
