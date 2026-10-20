@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Camera Logs</title><link rel="stylesheet" href="/style.css">
+</head><body><div class="wrap">
+<div class="nav"><a class="back" href="/">← Home</a><a href="/camera">Live camera</a></div>
+<div class="bar">
+  <input type="date" id="day" title="Day (Central Time)">
+  <select id="cls">
+    <option value="">Everything</option><option value="person">People</option><option value="cat">Cats</option>
+    <option value="dog">Dogs</option><option value="bird">Birds</option>
+  </select>
+  <select id="kinds">
+    <option value="">All entries</option><option value="snapshot">Snapshots only</option>
+    <option value="snapshot,motion">Snapshots + motion</option>
+  </select>
+  <label class="dim"><input type="checkbox" id="named"> named only</label>
+  <button class="btn" id="go">Apply</button>
+</div>
+<div class="grid" id="grid"></div>
+<div class="bar"><button class="btn" id="more" hidden>Load more</button><span class="dim" id="empty"></span></div>
+</div>
+
+<div class="modal" id="modal"><div class="in">
+  <div class="bar"><button class="btn" id="close">Close</button><span id="mt" class="dim"></span>
+    <button class="btn danger" id="del" style="margin-left:auto">Delete</button></div>
+  <div class="stage" id="mstage"><img id="mimg" alt=""><div class="overlay" id="mov"></div></div>
+  <div class="panel">
+    <div id="msum"></div>
+    <div id="namer" class="bar" hidden>
+      <span class="dim" id="sel"></span>
+      <input id="nm" placeholder="Name (e.g. Alex, Whiskers)" maxlength="60">
+      <button class="btn primary" id="nsave">Save name</button>
+      <button class="btn" id="nclear">Clear name</button>
+    </div>
+    <div class="dim" id="mhint">Click a box on the picture to name it.</div>
+  </div>
+</div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let items=[],lastId=null,cur=null,selDet=null;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function params(){
+  const p=new URLSearchParams({limit:48});
+  if($('day').value)p.set('day',$('day').value);
+  if($('cls').value)p.set('cls',$('cls').value);
+  if($('kinds').value)p.set('kinds',$('kinds').value);
+  if($('named').checked)p.set('named','1');
+  if(lastId)p.set('before_id',lastId);
+  return p;
+}
+async function load(reset){
+  if(reset){items=[];lastId=null;$('grid').innerHTML='';}
+  const r=await(await fetch('/api/events?'+params())).json();
+  r.forEach(e=>{items.push(e);addCard(e);});
+  if(r.length)lastId=r[r.length-1].id;
+  $('more').hidden=r.length<48;
+  $('empty').textContent=items.length?'':'Nothing logged for this filter yet.';
+}
+function addCard(e){
+  const d=document.createElement('div');d.className='card';d.id='c'+e.id;
+  d.innerHTML=(e.thumb?`<img loading="lazy" src="/img/${e.thumb}">`:`<div class="noimg">no image</div>`)+
+    `<div class="meta">${esc(e.summary)}<div class="t">${esc(e.local)}</div></div>`;
+  d.onclick=()=>openModal(e.id);
+  $('grid').appendChild(d);
+}
+function openModal(id){
+  cur=items.find(x=>x.id===id);if(!cur)return;selDet=null;
+  $('modal').classList.add('open');renderModal();
+}
+function renderModal(){
+  const e=cur;
+  $('mt').textContent=e.local+' · #'+e.id;
+  $('msum').textContent=e.summary;
+  const img=$('mimg');img.src=e.img?('/img/'+e.img):'';
+  $('mstage').style.display=e.img?'':'none';
+  const ov=$('mov');ov.innerHTML='';
+  e.detections.forEach(d=>{
+    const b=document.createElement('div');
+    b.className='box'+(d.id===selDet?' sel':'')+(['person','cat','dog','bird','horse','sheep','cow','bear'].includes(d.cls)?'':' static');
+    b.style.cssText=`left:${d.x*100}%;top:${d.y*100}%;width:${d.w*100}%;height:${d.h*100}%`;
+    b.innerHTML=`<span>${esc(d.name||d.cls)}${d.name?' ('+esc(d.cls)+')':''}</span>`;
+    b.onclick=ev=>{ev.stopPropagation();selDet=d.id;$('sel').textContent='Naming the '+d.cls;$('nm').value=d.name||'';$('namer').hidden=false;renderModal();$('nm').focus();};
+    ov.appendChild(b);
+  });
+  $('namer').hidden=selDet===null;
+  $('mhint').hidden=!e.detections.length;
+}
+async function saveName(name){
+  if(selDet===null)return;
+  await fetch(`/api/detections/${selDet}/name`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+  const r=await(await fetch('/api/events?limit=1&before_id='+(cur.id+1))).json();
+  if(r[0]&&r[0].id===cur.id){const i=items.findIndex(x=>x.id===cur.id);items[i]=cur=r[0];
+    document.querySelector('#c'+cur.id+' .meta').firstChild.textContent=cur.summary;}
+  selDet=null;renderModal();
+}
+$('nsave').onclick=()=>saveName($('nm').value.trim());
+$('nclear').onclick=()=>saveName('');
+$('nm').addEventListener('keydown',e=>{if(e.key==='Enter')saveName($('nm').value.trim());});
+$('close').onclick=()=>$('modal').classList.remove('open');
+$('modal').addEventListener('click',e=>{if(e.target===$('modal')||e.target.classList.contains('in'))$('modal').classList.remove('open');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('modal').classList.remove('open');});
+$('del').onclick=async()=>{
+  if($('del').dataset.arm!=='1'){$('del').dataset.arm='1';$('del').textContent='Click again to confirm';setTimeout(()=>{$('del').dataset.arm='';$('del').textContent='Delete';},3000);return;}
+  await fetch('/api/events/'+cur.id,{method:'DELETE'});
+  document.getElementById('c'+cur.id).remove();items=items.filter(x=>x.id!==cur.id);
+  $('del').dataset.arm='';$('del').textContent='Delete';$('modal').classList.remove('open');
+};
+$('go').onclick=()=>load(true);$('more').onclick=()=>load(false);
+load(true);
+</script></body></html>

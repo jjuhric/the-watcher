@@ -1,0 +1,14 @@
+# secrets and runtime data - never commit
+.env
+*.env
+!.env.example
+data/
+*.db
+*.db-wal
+*.db-shm
+models/*.onnx
+models/*.pt
+.venv/
+__pycache__/
+*.pyc
+.sync-state

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Living Room Cam</title><link rel="stylesheet" href="/style.css">
+</head><body><div class="wrap">
+<h1>Living Room Cam</h1>
+<div><span id="cam" class="chip">checking…</span> <span id="now" class="dim"></span></div>
+<div class="big">
+  <a href="/camera">View Camera<small>live feed with detection boxes</small></a>
+  <a href="/logs">View Logs<small>snapshots, summaries, name what it saw</small></a>
+</div>
+<div id="last" class="dim"></div>
+</div>
+<script>
+async function tick(){
+  try{
+    const s=await (await fetch('/api/status')).json();
+    const c=document.getElementById('cam');
+    c.textContent=s.camera_online?'camera online':'camera OFFLINE';
+    c.className='chip '+(s.camera_online?'ok':'bad');
+    document.getElementById('now').textContent=s.now_local+' · right now: '+s.scene_now.join(', ');
+    document.getElementById('last').textContent=s.last_event?('Last log: '+s.last_event.local+' - '+s.last_event.summary):'';
+  }catch(e){document.getElementById('cam').textContent='unreachable';}
+}
+tick();setInterval(tick,5000);
+</script></body></html>

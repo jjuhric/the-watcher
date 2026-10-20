@@ -1,0 +1,14 @@
+[Unit]
+Description=Living room camera (OpenCV motion + YOLO snapshots)
+After=network-online.target tailscaled.service
+
+[Service]
+WorkingDirectory=%h/Sandbox/living-cam
+EnvironmentFile=%h/Sandbox/living-cam/.env
+ExecStart=%h/Sandbox/living-cam/.venv/bin/python app.py
+Nice=10
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Camera</title><link rel="stylesheet" href="/style.css">
+</head><body><div class="wrap">
+<div class="nav"><a class="back" href="/">← Home</a><a href="/logs">Logs</a><span id="st" class="chip">…</span></div>
+<div class="stage" id="stage">
+  <img id="feed" src="/stream.mjpg" alt="live feed">
+  <div class="overlay" id="ov"></div>
+</div>
+<div class="bar">
+  <button class="btn" id="edit">Edit ignore zones</button>
+  <button class="btn primary" id="save" hidden>Save zones</button>
+  <button class="btn danger" id="clear" hidden>Clear all</button>
+  <span class="dim" id="hint">Ignore zones (a TV, a window, a fan) are skipped by motion and detection.</span>
+</div>
+<div class="dim" id="info"></div>
+</div>
+<script>
+let zones=[],editing=false,drag=null;
+const ov=document.getElementById('ov'),stage=document.getElementById('stage');
+function draw(){
+  ov.innerHTML='';
+  zones.forEach((z,i)=>{
+    const d=document.createElement('div');d.className='zone';
+    d.style.cssText=`left:${z.x*100}%;top:${z.y*100}%;width:${z.w*100}%;height:${z.h*100}%`;
+    if(editing){d.title='click to remove';d.style.cursor='pointer';d.onclick=e=>{e.stopPropagation();zones.splice(i,1);draw();};}
+    ov.appendChild(d);
+  });
+}
+function pt(e){const r=stage.getBoundingClientRect();return{x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))};}
+ov.addEventListener('pointerdown',e=>{if(!editing)return;drag=pt(e);ov.setPointerCapture(e.pointerId);});
+ov.addEventListener('pointermove',e=>{
+  if(!drag)return;const p=pt(e);
+  draw();const d=document.createElement('div');d.className='zone';
+  d.style.cssText=`left:${Math.min(drag.x,p.x)*100}%;top:${Math.min(drag.y,p.y)*100}%;width:${Math.abs(p.x-drag.x)*100}%;height:${Math.abs(p.y-drag.y)*100}%`;ov.appendChild(d);
+});
+ov.addEventListener('pointerup',e=>{
+  if(!drag)return;const p=pt(e);
+  zones.push({x:Math.min(drag.x,p.x),y:Math.min(drag.y,p.y),w:Math.abs(p.x-drag.x),h:Math.abs(p.y-drag.y)});
+  drag=null;draw();
+});
+function setEdit(on){
+  editing=on;ov.style.cursor=on?'crosshair':'';
+  document.getElementById('save').hidden=!on;document.getElementById('clear').hidden=!on;
+  document.getElementById('edit').textContent=on?'Cancel':'Edit ignore zones';
+  document.getElementById('hint').textContent=on?'Drag on the picture to draw a zone; click a zone to remove it.':'Ignore zones (a TV, a window, a fan) are skipped by motion and detection.';
+  draw();
+}
+document.getElementById('edit').onclick=async()=>{if(editing){zones=(await(await fetch('/api/zones')).json()).zones;}setEdit(!editing);};
+document.getElementById('clear').onclick=()=>{zones=[];draw();};
+document.getElementById('save').onclick=async()=>{
+  await fetch('/api/zones',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zones})});
+  setEdit(false);
+};
+async function tick(){
+  try{
+    const s=await(await fetch('/api/status')).json();
+    const c=document.getElementById('st');
+    c.textContent=s.camera_online?`online · ${s.fps} fps`:'camera OFFLINE';c.className='chip '+(s.camera_online?'ok':'bad');
+    document.getElementById('info').textContent=`${s.now_local} · motion ${s.motion_pct}% · in view: ${s.scene_now.join(', ')}`;
+  }catch(e){}
+}
+(async()=>{zones=(await(await fetch('/api/zones')).json()).zones;draw();})();
+tick();setInterval(tick,3000);
+</script></body></html>
