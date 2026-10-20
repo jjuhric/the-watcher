@@ -1,4 +1,6 @@
-# Living Room Cam
+# The Watcher
+
+<img src="web/logo.svg" alt="The Watcher logo" width="96" align="right">
 
 Small self-hosted home camera for a Raspberry Pi. A USB webcam watches a room; OpenCV detects motion,
 a small YOLO11n ONNX model (run via OpenCV DNN, no cloud, no LLM) says what moved, and a still is saved
@@ -17,7 +19,7 @@ whenever a person or animal appears. Web UI: live view + searchable log where yo
 ## Setup (Pi, Debian/Raspberry Pi OS)
 
 ```bash
-git clone https://github.com/jjuhric/living-room-cam.git ~/Sandbox/living-cam
+git clone https://github.com/jjuhric/the-watcher.git ~/Sandbox/living-cam
 cd ~/Sandbox/living-cam
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env && chmod 600 .env        # set LC_USER / LC_PASS / LC_BIND
@@ -43,12 +45,16 @@ Then open `http://<LC_BIND>:5070` (e.g. over Tailscale) and sign in.
 
 `.env` (credentials), `data/` (images + database) and `models/*.onnx` are git-ignored. Never commit them.
 The server refuses to start without `LC_USER` / `LC_PASS`, and every route requires HTTP Basic auth.
-Bind to a Tailscale IP so it is not exposed on the LAN, and use Tailscale's HTTPS (`tailscale serve`) if you
-want the password encrypted in transit beyond WireGuard (traffic is already encrypted by Tailscale).
+Run it with `LC_BIND=127.0.0.1` and publish it privately with `tailscale serve --bg --https=5070 http://127.0.0.1:5070`,
+which gives a tailnet-only HTTPS address with a real certificate (nothing is exposed on the LAN or internet).
 
 ## Archiving to a PC
 
 `scripts/sync_to_laptop.ps1` pulls a consistent copy of the database plus new images (incremental).
+
+## Logo
+
+`python scripts/make_logo.py` regenerates `web/logo.svg`, `favicon.ico` and the app icons (needs Pillow).
 
 ## Tuning
 

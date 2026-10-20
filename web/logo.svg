@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="The Watcher">
+  <defs><clipPath id="eye"><path d="M110 512Q512 170 914 512Q512 854 110 512Z"/></clipPath></defs>
+  <rect width="1024" height="1024" rx="210" fill="#0f1722"/>
+  <g clip-path="url(#eye)">
+    <rect width="1024" height="1024" fill="#eef4ff"/>
+    <circle cx="512" cy="512" r="182" fill="#1757b8"/>
+    <circle cx="512" cy="512" r="160" fill="#2f8cff"/>
+    <circle cx="512" cy="512" r="82" fill="#05080d"/>
+    <circle cx="547" cy="467" r="25" fill="#fff"/>
+  </g>
+  <path d="M110 512Q512 170 914 512Q512 854 110 512Z" fill="none" stroke="#2f8cff" stroke-width="14" stroke-linejoin="round"/>
+</svg>

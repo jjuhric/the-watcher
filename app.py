@@ -22,7 +22,7 @@ def require_auth():
     ok = (a and hmac.compare_digest(a.username or "", config.USER)
           and hmac.compare_digest(a.password or "", config.PASSWORD))
     if not ok:
-        return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="Living Room Cam"'})
+        return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="The Watcher"'})
 
 
 @app.after_request
@@ -47,9 +47,14 @@ def logs_page():
     return send_from_directory(WEB, "logs.html")
 
 
-@app.get("/style.css")
-def css():
-    return send_from_directory(WEB, "style.css")
+ASSETS = {"style.css", "logo.svg", "favicon.ico", "icon-192.png", "icon-512.png", "manifest.webmanifest"}
+
+
+@app.get("/<any_asset>")
+def asset(any_asset):
+    if any_asset not in ASSETS:
+        abort(404)
+    return send_from_directory(WEB, any_asset)
 
 
 @app.get("/img/<path:rel>")
@@ -122,7 +127,7 @@ def api_summary():
     since = (db.now_utc() - timedelta(hours=hours)).isoformat(timespec="seconds")
     events = list(reversed(db.fetch_events(limit=200, since_iso=since)))
     st = engine.status()
-    lines = [f"Living room camera - {st['now_local']}",
+    lines = [f"The Watcher (living room camera) - {st['now_local']}",
              f"Camera: {'ONLINE' if st['camera_online'] else 'OFFLINE'} | detector: "
              f"{'loaded' if st['detector_loaded'] else 'NOT loaded'} | free disk: {st['disk_free_gb']} GB",
              f"Right now: {', '.join(st['scene_now'])}", f"Last {hours:g} h: {len(events)} log entries", ""]

@@ -39,3 +39,4 @@ input,select{background:var(--card);color:var(--fg);border:1px solid var(--line)
 .box span{position:absolute;left:-2px;top:-22px;background:var(--ok);color:#000;font-size:.75rem;line-height:1;padding:3px 6px;white-space:nowrap}
 .box.static span{background:#c8a03c}.box.sel span{background:var(--accent);color:#fff}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px}
+.brand{display:flex;align-items:center;gap:12px}

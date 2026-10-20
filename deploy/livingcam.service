@@ -1,5 +1,5 @@
 [Unit]
-Description=Living room camera (OpenCV motion + YOLO snapshots)
+Description=The Watcher - living room camera (OpenCV motion + YOLO snapshots)
 After=network-online.target tailscaled.service
 
 [Service]
