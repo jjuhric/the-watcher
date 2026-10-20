@@ -210,3 +210,18 @@ def test_camera_switch_pauses_and_resumes(client):
 def config_state():
     import config
     return config.STATE_PATH
+
+
+def test_report_closes_a_visit_when_the_camera_is_switched_off():
+    import report
+    from datetime import timedelta
+    db_ = appmod.db
+    person = [{"cls": "person", "conf": 0.9, "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.5}]
+    start = db_.now_utc() - timedelta(minutes=30)
+    db_.add_event("snapshot", note="appeared", dets=person, ts=start)
+    rep = report.build(start - timedelta(minutes=1))
+    assert rep["open_now"] and rep["periods"][-1]["end"] is None            # still in view
+    db_.add_event("system", note="Camera turned off (viewer, web page)", ts=start + timedelta(minutes=10))
+    rep = report.build(start - timedelta(minutes=1))
+    assert not rep["open_now"] and rep["periods"][-1]["minutes"] == 10      # the visit ended when the camera stopped
+    assert "turned off" in rep["camera_last_state"]

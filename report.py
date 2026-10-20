@@ -57,7 +57,9 @@ def build(since_utc, now_utc=None):
             cur["peak_people"] = max(cur["peak_people"], n_people)
             cur["animals"].update(d["name"] or d["cls"] for d in trig if d["cls"] != "person")
             cur["names"].update(d["name"] for d in trig if d["name"])
-        elif e["kind"] == "departed" and cur is not None:
+        elif cur is not None and (e["kind"] == "departed" or (
+                e["kind"] == "system" and any(w in (e["note"] or "") for w in ("turned off", "went offline", "Service started")))):
+            # the visit ended: they left, or the camera stopped watching (so nobody is "in view" any more)
             cur["end"], cur["end_local"] = e["ts"], e["local"]
             cur = None
     for p in periods:
