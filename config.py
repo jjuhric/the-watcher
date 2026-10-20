@@ -14,6 +14,12 @@ PASSWORD = os.environ.get("LC_PASS", "")
 BIND = os.environ.get("LC_BIND", "127.0.0.1")
 PORT = _f("LC_PORT", 5070)
 
+# Passkeys (fingerprint / Windows Hello) only work on the https address. RP id = hostname (no port);
+# origins = full https origin(s) including the port. Leave LC_RP_ID empty to switch passkeys off.
+RP_ID = os.environ.get("LC_RP_ID", "")
+ORIGINS = [o.strip() for o in os.environ.get("LC_ORIGINS", "").split(",") if o.strip()]
+PUBLIC_URL = os.environ.get("LC_PUBLIC_URL", ORIGINS[0] if ORIGINS else "")
+
 CAMERA_SOURCE = os.environ.get("CAMERA_SOURCE", "auto")
 CAMERA_WIDTH = _f("CAMERA_WIDTH", 1920)
 CAMERA_HEIGHT = _f("CAMERA_HEIGHT", 1080)

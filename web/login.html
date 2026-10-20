@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Watcher · Sign in</title><link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="apple-touch-icon" href="/icon-192.png"><link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+<meta name="theme-color" content="#0f1722">
+<style>.wrap{padding-top:16px}.login{max-width:380px;margin:8vh auto 0;display:grid;gap:14px}.login .logo{display:flex;justify-content:center}</style>
+</head><body><div class="wrap"><div class="login">
+  <div class="logo"><img src="/logo.svg" alt="The Watcher" width="96" height="96"></div>
+  <h1 style="text-align:center;margin:0">The Watcher</h1>
+  <button class="btn primary" id="pk" hidden style="padding:12px">Sign in with fingerprint / Windows Hello</button>
+  <form class="form" id="f" style="max-width:none">
+    <label>Username<input id="u" autocomplete="username" autocapitalize="none" required></label>
+    <label>Password<input id="p" type="password" autocomplete="current-password" required></label>
+    <button class="btn" type="submit">Sign in</button>
+  </form>
+  <div id="msg" class="msg bad" hidden></div>
+</div></div>
+<script>
+const $=id=>document.getElementById(id);
+const next=(()=>{const n=new URLSearchParams(location.search).get('next')||'/';return n.startsWith('/')&&!n.startsWith('//')?n:'/';})();
+const enc=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const dec=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
+const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.status);return j;});
+function err(t){$('msg').hidden=false;$('msg').textContent=t;}
+$('f').onsubmit=e=>{e.preventDefault();post('/api/login',{username:$('u').value.trim(),password:$('p').value}).then(()=>location.href=next).catch(x=>err(x.message));};
+async function passkey(){
+  $('msg').hidden=true;
+  try{
+    const o=await post('/webauthn/login/options');
+    o.challenge=dec(o.challenge);o.allowCredentials=(o.allowCredentials||[]).map(c=>({type:c.type,id:dec(c.id)}));
+    const c=await navigator.credentials.get({publicKey:o});
+    await post('/webauthn/login/verify',{id:enc(c.rawId),response:{clientDataJSON:enc(c.response.clientDataJSON),authenticatorData:enc(c.response.authenticatorData),signature:enc(c.response.signature)}});
+    location.href=next;
+  }catch(x){err('Fingerprint sign-in did not work here ('+(x.message||'cancelled')+'). Use your password.');}
+}
+if(window.PublicKeyCredential&&location.protocol==='https:'){
+  fetch('/webauthn/login/options',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>{
+    if(r.ok){$('pk').hidden=false;try{if(localStorage.getItem('watcher_passkey')==='1')setTimeout(passkey,300);}catch(e){}}
+  });
+}
+$('pk').onclick=passkey;
+</script></body></html>

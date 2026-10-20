@@ -8,19 +8,13 @@ from waitress import serve
 import auth
 import config
 import db
+import web_auth
 from engine import Engine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 app = Flask(__name__, static_folder=None)
 engine = Engine()
 WEB = config.BASE / "web"
-
-
-@app.before_request
-def require_auth():
-    a = request.authorization
-    if not (a and auth.verify(a.username, a.password)):
-        return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="The Watcher"'})
 
 
 @app.after_request
@@ -46,6 +40,8 @@ def logs_page():
 
 
 ASSETS = {"style.css", "menu.js", "logo.svg", "favicon.ico", "icon-192.png", "icon-512.png", "manifest.webmanifest"}
+
+web_auth.init(app, ASSETS)
 
 
 @app.get("/<any_asset>")
@@ -86,20 +82,6 @@ def stream():
 
 
 # ---------- API ----------
-@app.get("/api/account")
-def api_account_get():
-    return jsonify(user=auth.current_user())
-
-
-@app.post("/api/account")
-def api_account_post():
-    j = request.get_json(silent=True) or {}
-    ok, msg = auth.change(j.get("current_password"), j.get("new_username"), j.get("new_password"))
-    if not ok:
-        time.sleep(1)  # slow down password guessing
-    return jsonify(ok=ok, message=msg), (200 if ok else 400)
-
-
 @app.get("/api/status")
 def api_status():
     return jsonify(engine.status())

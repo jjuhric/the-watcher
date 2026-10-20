@@ -6,30 +6,66 @@
 <link rel="apple-touch-icon" href="/icon-192.png"><link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
 <meta name="theme-color" content="#0f1722">
 </head><body><div class="wrap">
-<h1 class="brand"><img src="/logo.svg" alt="" width="44" height="44"> Change Username / Password</h1>
+<h1 class="brand"><img src="/logo.svg" alt="" width="44" height="44"> Account</h1>
+
+<h2 style="font-size:1.1rem">Change username / password</h2>
 <form class="form" id="f" autocomplete="off">
   <label>Current password (required)<input type="password" id="cur" autocomplete="current-password" required></label>
   <label>Username<input id="usr" autocomplete="off" maxlength="32"></label>
   <label>New password (leave blank to keep the current one)<input type="password" id="np" autocomplete="new-password"></label>
   <label>Confirm new password<input type="password" id="np2" autocomplete="new-password"></label>
+  <label style="grid-template-columns:auto 1fr;align-items:start;gap:8px;color:var(--fg)"><input type="checkbox" id="share" style="width:auto;margin-top:4px">
+    <span>Keep a copy of this login for my assistant (Claude). It is saved on the Pi, readable only by its owner account, and copied to the laptop's credentials file automatically.</span></label>
   <div><button class="btn primary" type="submit">Save changes</button></div>
   <div id="msg" class="msg" hidden></div>
-  <div class="dim">Usernames: 3-32 letters, numbers, . _ - &nbsp;·&nbsp; Passwords: at least 10 characters. After saving, your browser asks you to sign in again.</div>
+  <div class="dim">Usernames: 3-32 letters, numbers, . _ - &nbsp;·&nbsp; Passwords: at least 10 characters. After saving you will be asked to sign in again.</div>
 </form>
+
+<h2 style="font-size:1.1rem;margin-top:28px">Fingerprint / Windows Hello</h2>
+<div class="form" id="pkbox">
+  <div class="dim" id="pkhint"></div>
+  <div id="pklist"></div>
+  <label>Name this device<input id="pkname" placeholder="e.g. Laptop, Pixel phone" maxlength="40"></label>
+  <div><button class="btn primary" id="pkadd" type="button">Add this device</button></div>
+  <div id="pkmsg" class="msg" hidden></div>
+</div>
 </div>
 <script>
 const $=id=>document.getElementById(id);
 let orig='';
-fetch('/api/account').then(r=>r.json()).then(j=>{orig=j.user;$('usr').value=j.user;});
-function show(ok,t){const m=$('msg');m.hidden=false;m.className='msg '+(ok?'ok':'bad');m.textContent=t;}
+const enc=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const dec=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
+const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.status);return j;});
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function show(el,ok,t){el.hidden=false;el.className='msg '+(ok?'ok':'bad');el.textContent=t;}
+
+function load(){fetch('/api/account').then(r=>r.json()).then(j=>{
+  orig=j.user;$('usr').value=j.user;$('share').checked=j.share;
+  $('pkhint').textContent=!j.passkeys_ready?'Fingerprint sign-in is not switched on for this server.':!j.https?'Open this page from the https address to add a device.':'A registered device signs in with your fingerprint, face or Windows PIN instead of the password.';
+  $('pkadd').disabled=!(j.passkeys_ready&&j.https);
+  $('pklist').innerHTML=j.passkeys.length?j.passkeys.map(k=>`<div class="bar"><span>${esc(k.name)}</span><span class="dim">${k.used?'last used '+new Date(k.used*1000).toLocaleString():'not used yet'}</span><button class="btn danger" data-rm="${esc(k.id)}" style="margin-left:auto">Remove</button></div>`).join(''):'<div class="dim">No devices yet.</div>';
+});}
+load();
+$('pklist').addEventListener('click',e=>{const b=e.target.closest('button[data-rm]');if(b)post('/webauthn/remove',{id:b.dataset.rm}).then(load);});
+$('pkadd').onclick=async()=>{
+  try{
+    const o=await post('/webauthn/register/options');
+    o.challenge=dec(o.challenge);o.user.id=dec(o.user.id);o.excludeCredentials=(o.excludeCredentials||[]).map(c=>({type:c.type,id:dec(c.id)}));
+    const c=await navigator.credentials.create({publicKey:o});
+    await post('/webauthn/register/verify',{name:$('pkname').value.trim()||'device',response:{clientDataJSON:enc(c.response.clientDataJSON),attestationObject:enc(c.response.attestationObject)}});
+    try{localStorage.setItem('watcher_passkey','1');}catch(e){}
+    show($('pkmsg'),true,'Added. Next time use the fingerprint button on the sign-in page.');$('pkname').value='';load();
+  }catch(x){show($('pkmsg'),false,'Could not add this device ('+(x.message||'cancelled')+').');}
+};
 $('f').onsubmit=async e=>{
   e.preventDefault();
-  if($('np').value!==$('np2').value)return show(false,'The new passwords do not match.');
-  const body={current_password:$('cur').value};
+  if($('np').value!==$('np2').value)return show($('msg'),false,'The new passwords do not match.');
+  const body={current_password:$('cur').value,share:$('share').checked};
   if($('usr').value.trim()&&$('usr').value.trim()!==orig)body.new_username=$('usr').value.trim();
   if($('np').value)body.new_password=$('np').value;
-  const r=await fetch('/api/account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const j=await r.json();show(j.ok,j.message);
-  if(j.ok){$('f').querySelectorAll('input').forEach(i=>i.disabled=true);setTimeout(()=>location.href='/',2500);}
+  try{
+    const j=await post('/api/account',body);show($('msg'),true,j.message);
+    $('f').querySelectorAll('input').forEach(i=>i.disabled=true);setTimeout(()=>location.href='/login',2000);
+  }catch(x){show($('msg'),false,x.message);}
 };
 </script><script src="/menu.js"></script></body></html>
