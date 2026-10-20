@@ -200,7 +200,10 @@ def test_camera_switch_pauses_and_resumes(client):
     assert seq == -2 and jpg[:2] == b"\xff\xd8"                      # the "turned off" picture
     assert json.loads(config_state().read_text()) == {"enabled": False}
     assert client.post("/api/camera", json={"on": True}, headers=H).get_json() == {"enabled": True}
-    assert client.post("/api/camera", json={"on": False}).status_code == 401    # needs sign-in
+    assert appmod.app.test_client().post("/api/camera", json={"on": False}).status_code == 401    # needs sign-in
+    # every switch is written to the log, with who did it
+    notes = [e["note"] for e in appmod.db.fetch_events(limit=10, kinds=["system"])]
+    assert "Camera turned on (viewer, web page)" in notes and "Camera turned off (viewer, web page)" in notes
 
 
 def config_state():

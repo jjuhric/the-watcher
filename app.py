@@ -87,7 +87,7 @@ def api_camera():
     on = (request.get_json(silent=True) or {}).get("on")
     if not isinstance(on, bool):
         abort(400)
-    return jsonify(enabled=engine.set_enabled(on))
+    return jsonify(enabled=engine.set_enabled(on, by=f"{auth.info()['user']}, web page"))
 
 
 @app.get("/api/status")
